@@ -76,9 +76,8 @@ impl Miner {
                 find_bus(),
                 solution,
             ));
-            // self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
-            //     .await
-            //     .ok();
+            
+            if (best_difficulty > 20) {
             let tips = *tips.read().await;
             let mut tip = self.priority_fee;
             if (best_difficulty >= 22) {
@@ -93,6 +92,11 @@ impl Miner {
 
             self.send_and_confirm_by_jito(&ixs, ComputeBudget::Fixed(compute_budget), tip)
                 .await;
+            } else {
+                self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
+                .await
+                .ok();
+            }
         }
     }
 
