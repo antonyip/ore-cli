@@ -56,19 +56,19 @@ impl Miner {
         };
 
         // Confirm user wants to claim
-        if !ask_confirm(
-            format!(
-                "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
-                format!(
-                    "{} ORE",
-                    amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
-                )
-                .bold(),
-            )
-            .as_str(),
-        ) {
-            return;
-        }
+        // if !ask_confirm(
+        //     format!(
+        //         "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
+        //         format!(
+        //             "{} ORE",
+        //             amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
+        //         )
+        //         .bold(),
+        //     )
+        //     .as_str(),
+        // ) {
+        //     return;
+        // }
 
         // Send and confirm
         ixs.push(ore_api::instruction::claim(pubkey, beneficiary, amount));

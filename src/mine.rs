@@ -1,6 +1,8 @@
+//use core::num;
 use std::{sync::Arc, time::Instant};
 
 use colored::*;
+//use core_affinity::CoreId;
 use drillx::{
     equix::{self},
     Hash, Solution,
@@ -13,7 +15,7 @@ use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
-
+use std::fs;
 use crate::{
     args::MineArgs,
     send_and_confirm::ComputeBudget,
@@ -44,13 +46,32 @@ impl Miner {
 
             // Run drillx
             let config = get_config(&self.rpc_client).await;
-            let solution = Self::find_hash_par(
-                proof,
-                cutoff_time,
-                args.threads,
-                config.min_difficulty as u32,
-            )
-            .await;
+            let thread_count = args.threads;
+            for tindex in 0..thread_count {
+                let nonce_start = u64::MAX.saturating_div(thread_count).saturating_mul(tindex);
+                /*
+                let solution = Self::find_hash_par(
+                    proof,
+                    cutoff_time,
+                    args.threads,
+                    config.min_difficulty as u32,
+                    nonce_start,
+                );
+                */
+                if tindex == 0 {
+                    continue;
+                    // skip the main thread.
+                }
+                
+                Self::find_hash_par(
+                    proof,
+                    cutoff_time,
+                    1,
+                    config.min_difficulty as u32,
+                    nonce_start,
+                    tindex,
+                );
+            }
 
             // Submit most difficult hash
             let mut compute_budget = 500_000;
@@ -59,15 +80,20 @@ impl Miner {
                 compute_budget += 100_000;
                 ixs.push(ore_api::instruction::reset(signer.pubkey()));
             }
+            // ANT_TODO
+            /*
             ixs.push(ore_api::instruction::mine(
                 signer.pubkey(),
                 signer.pubkey(),
                 find_bus(),
                 solution,
             ));
+            */
+            /*
             self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
                 .await
                 .ok();
+            */
         }
     }
 
@@ -76,6 +102,8 @@ impl Miner {
         cutoff_time: u64,
         threads: u64,
         min_difficulty: u32,
+        nonce_start: u64,
+        tindex: u64,
     ) -> Solution {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
@@ -88,7 +116,8 @@ impl Miner {
                     let mut memory = equix::SolverMemory::new();
                     move || {
                         let timer = Instant::now();
-                        let mut nonce = u64::MAX.saturating_div(threads).saturating_mul(i);
+                        // let mut nonce = u64::MAX.saturating_div(threads).saturating_mul(i); # fed from outside
+                        let mut nonce = nonce_start;
                         let mut best_nonce = nonce;
                         let mut best_difficulty = 0;
                         let mut best_hash = Hash::default();
@@ -104,6 +133,11 @@ impl Miner {
                                     best_nonce = nonce;
                                     best_difficulty = difficulty;
                                     best_hash = hx;
+                                    let a = "C:\\Users\\anton\\Documents\\ore-cli\\target\\release\\blah";
+                                    let c = ".json";
+                                    let filepath: String = format!("{}{}{}",a,tindex,c);
+                                    let z = "\n";
+                                    fs::write(filepath, format!("{}{}{}{}{}",nonce,z,difficulty,z,difficulty));
                                 }
                             }
 
@@ -179,12 +213,12 @@ impl Miner {
             .le(&clock.unix_timestamp)
     }
 
-    async fn get_cutoff(&self, proof: Proof, buffer_time: u64) -> u64 {
+    async fn get_cutoff(&self, proof: Proof, buffer_time: i64) -> u64 {
         let clock = get_clock(&self.rpc_client).await;
         proof
             .last_hash_at
             .saturating_add(60)
-            .saturating_sub(buffer_time as i64)
+            .saturating_sub(buffer_time)
             .saturating_sub(clock.unix_timestamp)
             .max(0) as u64
     }
