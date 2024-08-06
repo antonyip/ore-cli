@@ -1,16 +1,16 @@
 use std::str::FromStr;
 
-use colored::*;
+//use colored::*;
 use ore_api::consts::MINT_ADDRESS;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
-use spl_token::amount_to_ui_amount;
+//use spl_token::amount_to_ui_amount;
 
 use crate::{
     args::ClaimArgs,
     cu_limits::CU_LIMIT_CLAIM,
     send_and_confirm::ComputeBudget,
-    utils::{amount_f64_to_u64, ask_confirm, get_proof_with_authority},
+    utils::{amount_f64_to_u64, /*ask_confirm, */ get_proof_with_authority},
     Miner,
 };
 
@@ -56,19 +56,19 @@ impl Miner {
         };
 
         // Confirm user wants to claim
-        if !ask_confirm(
-            format!(
-                "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
-                format!(
-                    "{} ORE",
-                    amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
-                )
-                .bold(),
-            )
-            .as_str(),
-        ) {
-            return;
-        }
+        // if !ask_confirm(
+        //     format!(
+        //         "\nYou are about to claim {}.\n\nAre you sure you want to continue? [Y/n]",
+        //         format!(
+        //             "{} ORE",
+        //             amount_to_ui_amount(amount, ore_api::consts::TOKEN_DECIMALS)
+        //         )
+        //         .bold(),
+        //     )
+        //     .as_str(),
+        // ) {
+        //     return;
+        // }
 
         // Send and confirm
         ixs.push(ore_api::instruction::claim(pubkey, beneficiary, amount));

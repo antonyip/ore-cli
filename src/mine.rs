@@ -13,13 +13,23 @@ use rand::Rng;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::spinner;
 use solana_sdk::signer::Signer;
-
+use tokio::sync::RwLock;
 use crate::{
     args::MineArgs,
     send_and_confirm::ComputeBudget,
     utils::{amount_u64_to_string, get_clock, get_config, get_proof_with_authority, proof_pubkey},
     Miner,
 };
+use crate::{
+    constant,
+    constant::FEE_PER_SIGNER,
+    format_duration,
+    format_reward,
+    jito,
+    jito::{subscribe_jito_tips, JitoTips},
+    utils,
+};
+use crate::utils::amount_u64_to_f64;
 
 impl Miner {
     pub async fn mine(&self, args: MineArgs) {
@@ -29,7 +39,8 @@ impl Miner {
 
         // Check num threads
         self.check_num_cores(args.threads);
-
+        let tips = Arc::new(RwLock::new(JitoTips::default()));
+        subscribe_jito_tips(tips.clone()).await;
         // Start mining loop
         loop {
             // Fetch proof
@@ -44,7 +55,7 @@ impl Miner {
 
             // Run drillx
             let config = get_config(&self.rpc_client).await;
-            let solution = Self::find_hash_par(
+            let (solution, best_difficulty) = Self::find_hash_par(
                 proof,
                 cutoff_time,
                 args.threads,
@@ -65,9 +76,23 @@ impl Miner {
                 find_bus(),
                 solution,
             ));
-            self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
-                .await
-                .ok();
+            // self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
+            //     .await
+            //     .ok();
+            let tips = *tips.read().await;
+            let mut tip = self.priority_fee;
+            if (best_difficulty >= 22) {
+                tip = 100000.max(tips.p50() + 1);
+            } else if (best_difficulty >= 20) {
+                tip = 60000.max(tips.p50() + 1);
+            } else if (best_difficulty >= 16) {
+                tip = 35000.max(tips.p50() + 1);
+            } else {
+                tip = 25000.max(tips.p50() + 1);
+            }
+
+            self.send_and_confirm_by_jito(&ixs, ComputeBudget::Fixed(compute_budget), tip)
+                .await;
         }
     }
 
@@ -76,7 +101,7 @@ impl Miner {
         cutoff_time: u64,
         threads: u64,
         min_difficulty: u32,
-    ) -> Solution {
+    ) -> (Solution, u32) {
         // Dispatch job to each thread
         let progress_bar = Arc::new(spinner::new_progress_bar());
         progress_bar.set_message("Mining...");
@@ -154,7 +179,7 @@ impl Miner {
             best_difficulty
         ));
 
-        Solution::new(best_hash.d, best_nonce.to_le_bytes())
+        (Solution::new(best_hash.d, best_nonce.to_le_bytes()), best_difficulty)
     }
 
     pub fn check_num_cores(&self, threads: u64) {
@@ -179,12 +204,12 @@ impl Miner {
             .le(&clock.unix_timestamp)
     }
 
-    async fn get_cutoff(&self, proof: Proof, buffer_time: u64) -> u64 {
+    async fn get_cutoff(&self, proof: Proof, buffer_time: i64) -> u64 {
         let clock = get_clock(&self.rpc_client).await;
         proof
             .last_hash_at
             .saturating_add(60)
-            .saturating_sub(buffer_time as i64)
+            .saturating_sub(buffer_time)
             .saturating_sub(clock.unix_timestamp)
             .max(0) as u64
     }
