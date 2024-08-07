@@ -76,8 +76,8 @@ impl Miner {
                 find_bus(),
                 solution,
             ));
-            
-            if (best_difficulty > 20) {
+
+            if (best_difficulty > 17) {
             let tips = *tips.read().await;
             let mut tip = self.priority_fee;
             if (best_difficulty >= 22) {
